@@ -116,7 +116,7 @@ public sealed class WindowsBackgroundService : BackgroundService
 				return c.Response.WriteAsync($"400 Bad Request / {message}(KyoshinMonitorProxy)");
 			}
 
-			if (c.Request.Path.HasValue && c.Request.Path == "/kmp-status")
+			if (c.Request.Path.HasValue && c.Request.Path.Value == "/kmp-status")
             {
 				c.Response.StatusCode = 200;
 				c.Response.Headers.ContentType = "text/plain";
@@ -130,7 +130,6 @@ public sealed class WindowsBackgroundService : BackgroundService
 				await c.Response.WriteAsync($"ミスキャッシュ数: {missTotal:#,0} ({missTotal / (double)total:P2})\n");
 				await c.Response.WriteAsync("\nソースコード: https://github.com/ingen084/KyoshinMonitorProxy\n更新情報: https://github.com/ingen084/KyoshinMonitorProxy/releases");
 				return;
-
 			}
 			if (c.Request.Host.HasValue && c.Request.Host.Value.EndsWith("bosai.go.jp"))
 			{
