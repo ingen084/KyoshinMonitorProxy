@@ -126,8 +126,8 @@ public sealed class WindowsBackgroundService : BackgroundService
 				var hitTotal = controller.CacheStats.Count(s => s.isHit);
 				var missTotal = controller.CacheStats.Count(s => !s.isHit);
 				await c.Response.WriteAsync($"リクエスト数: {total:#,0}\n");
-				await c.Response.WriteAsync($"キャッシュヒット数: {hitTotal:#,0} ({hitTotal / (double)total:P2})\n");
-				await c.Response.WriteAsync($"ミスキャッシュ数: {missTotal:#,0} ({missTotal / (double)total:P2})\n");
+				await c.Response.WriteAsync($"キャッシュヒット数: {hitTotal:#,0} ({(total == 0 ? 0 : (hitTotal / (double)total)):P2})\n");
+				await c.Response.WriteAsync($"ミスキャッシュ数: {missTotal:#,0} ({(total == 0 ? 0 : (missTotal / (double)total)):P2})\n");
 				await c.Response.WriteAsync("\nソースコード: https://github.com/ingen084/KyoshinMonitorProxy\n更新情報: https://github.com/ingen084/KyoshinMonitorProxy/releases");
 				return;
 			}

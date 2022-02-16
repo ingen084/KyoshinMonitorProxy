@@ -18,7 +18,7 @@ namespace KyoshinMonitorProxy
 {
 	public class CertManager
 	{
-		private const int CURRENT_CERT_VERSION = 1;
+		private const int CURRENT_CERT_VERSION = 2;
 
 		static X509Certificate2 CreateSelfSignedCertificateBasedOnCertificateAuthorityPrivateKey(string subjectName, string issuerName, AsymmetricKeyParameter issuerPrivKey)
 		{
@@ -35,6 +35,7 @@ namespace KyoshinMonitorProxy
 				new GeneralName(GeneralName.DnsName, "*.bosai.go.jp"),
 				new GeneralName(GeneralName.DnsName, "*.lmoni.bosai.go.jp"),
 				new GeneralName(GeneralName.DnsName, "*.kmoni.bosai.go.jp"),
+				new GeneralName(GeneralName.DnsName, "*.lmoniexp.bosai.go.jp"),
 			}));
 
 			// Serial Number
