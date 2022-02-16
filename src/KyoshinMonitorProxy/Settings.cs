@@ -6,6 +6,7 @@ namespace KyoshinMonitorProxy
 	{
 		public string? RootThumbprint { get; set; }
 		public string? PersonalThumbprint { get; set; }
+		public int? Version { get; set; }
 
 		public static async Task<Settings> LoadAsync()
 		{

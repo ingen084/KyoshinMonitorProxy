@@ -31,6 +31,9 @@ else
 	}
 	else if (sel.StartsWith("2."))
 	{
+		var p2 = Process.Start(new ProcessStartInfo("sc.exe", $"stop \"KyoshinMonitorProxy\""));
+		if (p2 != null)
+			await p2.WaitForExitAsync();
 		var p1 = Process.Start(new ProcessStartInfo("sc.exe", $"delete \"KyoshinMonitorProxy\""));
 		if (p1 != null)
 			await p1.WaitForExitAsync();
@@ -46,7 +49,12 @@ else
 }
 #endif
 
-Console.WriteLine("証明書を確認しています");
+const string HOSTS_LINE = "127.0.0.100 smi.lmoniexp.bosai.go.jp www.lmoni.bosai.go.jp www.kmoni.bosai.go.jp";
+
+AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+{
+	HostsController.RemoveAsync(HOSTS_LINE).Wait();
+};
 
 Host.CreateDefaultBuilder(args)
 	.UseWindowsService().ConfigureServices(services =>
@@ -56,6 +64,8 @@ Host.CreateDefaultBuilder(args)
 
 public sealed class WindowsBackgroundService : BackgroundService
 {
+	const string HOSTS_LINE = "127.0.0.100 smi.lmoniexp.bosai.go.jp www.lmoni.bosai.go.jp www.kmoni.bosai.go.jp";
+
 	private ILogger<WindowsBackgroundService> Logger { get; }
 
 	public WindowsBackgroundService(ILogger<WindowsBackgroundService> logger)
@@ -87,11 +97,9 @@ public sealed class WindowsBackgroundService : BackgroundService
 		});
 		await using var app = builder.Build();
 
-		var hostsLine = "127.0.0.100 www.lmoni.bosai.go.jp www.kmoni.bosai.go.jp";
-
 		app.Lifetime.ApplicationStopped.Register(() =>
 		{
-			HostsController.RemoveAsync(hostsLine).Wait();
+			HostsController.RemoveAsync(HOSTS_LINE).Wait();
 		});
 
 		if (app.Environment.IsDevelopment())
@@ -108,6 +116,22 @@ public sealed class WindowsBackgroundService : BackgroundService
 				return c.Response.WriteAsync($"400 Bad Request / {message}(KyoshinMonitorProxy)");
 			}
 
+			if (c.Request.Path.HasValue && c.Request.Path == "/kmp-status")
+            {
+				c.Response.StatusCode = 200;
+				c.Response.Headers.ContentType = "text/plain";
+				await c.Response.WriteAsync("KyoshinMonitorProxy Ver.0.0.2\n");
+				await c.Response.WriteAsync($"統計情報({DateTime.Now:yyyy/MM/dd HH:mm:ss}現在 過去1分間)\n");
+				var total = controller.CacheStats.Count;
+				var hitTotal = controller.CacheStats.Count(s => s.isHit);
+				var missTotal = controller.CacheStats.Count(s => !s.isHit);
+				await c.Response.WriteAsync($"リクエスト数: {total:#,0}\n");
+				await c.Response.WriteAsync($"キャッシュヒット数: {hitTotal:#,0} ({hitTotal / (double)total:P2})\n");
+				await c.Response.WriteAsync($"ミスキャッシュ数: {missTotal:#,0} ({missTotal / (double)total:P2})\n");
+				await c.Response.WriteAsync("\nソースコード: https://github.com/ingen084/KyoshinMonitorProxy\n更新情報: https://github.com/ingen084/KyoshinMonitorProxy/releases");
+				return;
+
+			}
 			if (c.Request.Host.HasValue && c.Request.Host.Value.EndsWith("bosai.go.jp"))
 			{
 				await controller.FetchAndWriteAsync(c);
@@ -118,6 +142,7 @@ public sealed class WindowsBackgroundService : BackgroundService
 
 		var timer = new Timer(_ =>
 		{
+			controller.CacheStats.RemoveAll(s => (DateTime.Now - s.reqTime) >= TimeSpan.FromMinutes(1));
 			GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
 #if DEBUG
 			Logger.LogWarning("LOH GC Before: {memory}", GC.GetTotalMemory(false));
@@ -128,7 +153,7 @@ public sealed class WindowsBackgroundService : BackgroundService
 #endif
 		}, null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
 
-		await HostsController.AddAsync(hostsLine);
+		await HostsController.AddAsync(HOSTS_LINE);
 		await app.RunAsync(stoppingToken);
 	}
 }

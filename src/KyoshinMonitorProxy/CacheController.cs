@@ -1,8 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
-using System;
-using MessagePack;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace KyoshinMonitorProxy
@@ -39,6 +37,7 @@ namespace KyoshinMonitorProxy
 			byte[] Body);
 
 		private IMemoryCache Cache { get; }
+		public List<(DateTime reqTime, bool isHit)> CacheStats { get; } = new();
 
 		public async Task FetchAndWriteAsync(HttpContext context)
 		{
@@ -52,6 +51,7 @@ namespace KyoshinMonitorProxy
 			{
 				Console.WriteLine("キャッシュ利用: " + url);
 				await Write(context, cache);
+				CacheStats.Add((DateTime.Now, true));
 				return;
 			}
 
@@ -75,6 +75,7 @@ namespace KyoshinMonitorProxy
 			}
 
 			Console.WriteLine("フェッチ開始: " + url);
+			CacheStats.Add((DateTime.Now, false));
 			//await Semaphore.WaitAsync(10000, context.RequestAborted);
 			try
 			{
@@ -95,7 +96,8 @@ namespace KyoshinMonitorProxy
 				if (response.StatusCode != HttpStatusCode.NotFound)
 					Cache.Set(url, cacheObject, new MemoryCacheEntryOptions() 
 					{
-						AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1),
+						// latest.json (時刻API) は1秒しかキャッシュしないようにする
+						AbsoluteExpirationRelativeToNow = context.Request.Path.Value.Contains("latest.json") ? TimeSpan.FromSeconds(1) : TimeSpan.FromMinutes(1),
 						Size = 1,
 					});
 

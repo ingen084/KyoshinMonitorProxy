@@ -18,6 +18,8 @@ namespace KyoshinMonitorProxy
 {
 	public class CertManager
 	{
+		private const int CURRENT_CERT_VERSION = 1;
+
 		static X509Certificate2 CreateSelfSignedCertificateBasedOnCertificateAuthorityPrivateKey(string subjectName, string issuerName, AsymmetricKeyParameter issuerPrivKey)
 		{
 			const int keyStrength = 2048;
@@ -188,7 +190,9 @@ namespace KyoshinMonitorProxy
 				true ||
 #endif
 				config.RootThumbprint == null ||
-				GetCertificateToSpecifiedStore(config.RootThumbprint, StoreName.Root, StoreLocation.LocalMachine) is not X509Certificate2 root
+				GetCertificateToSpecifiedStore(config.RootThumbprint, StoreName.Root, StoreLocation.LocalMachine) is not X509Certificate2 root ||
+				config.Version is not int ver ||
+				ver < CURRENT_CERT_VERSION
 			)
 			{
 				// 既存の証明書を削除する
