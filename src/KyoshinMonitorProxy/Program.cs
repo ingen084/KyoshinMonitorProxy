@@ -69,9 +69,9 @@ public sealed class WindowsBackgroundService : BackgroundService
 	private ILogger<WindowsBackgroundService> Logger { get; }
 
 	public WindowsBackgroundService(ILogger<WindowsBackgroundService> logger)
-    {
+	{
 		Logger = logger;
-    }
+	}
 
 	protected override async Task ExecuteAsync(CancellationToken stoppingToken)
 	{
@@ -117,9 +117,9 @@ public sealed class WindowsBackgroundService : BackgroundService
 			}
 
 			if (c.Request.Path.HasValue && c.Request.Path.Value == "/kmp-status")
-            {
+			{
 				c.Response.StatusCode = 200;
-				c.Response.Headers.ContentType = "text/plain";
+				c.Response.Headers.ContentType = "text/plain; charset=\"UTF-8\"";
 				await c.Response.WriteAsync("KyoshinMonitorProxy Ver.0.0.2\n");
 				await c.Response.WriteAsync($"統計情報({DateTime.Now:yyyy/MM/dd HH:mm:ss}現在 過去1分間)\n");
 				var total = controller.CacheStats.Count;
