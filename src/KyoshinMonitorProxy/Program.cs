@@ -65,6 +65,7 @@ Host.CreateDefaultBuilder(args)
 public sealed class WindowsBackgroundService : BackgroundService
 {
 	const string HOSTS_LINE = "127.0.0.100 smi.lmoniexp.bosai.go.jp www.lmoni.bosai.go.jp www.kmoni.bosai.go.jp";
+	private Timer? Timer { get; set; }
 
 	private ILogger<WindowsBackgroundService> Logger { get; }
 
@@ -127,11 +128,13 @@ public sealed class WindowsBackgroundService : BackgroundService
 				var missTotal = controller.CacheStats.Count(s => !s.isHit);
 				await c.Response.WriteAsync($"リクエスト数: {total:#,0}\n");
 				await c.Response.WriteAsync($"キャッシュヒット数: {hitTotal:#,0} ({(total == 0 ? 0 : (hitTotal / (double)total)):P2})\n");
-				await c.Response.WriteAsync($"ミスキャッシュ数: {missTotal:#,0} ({(total == 0 ? 0 : (missTotal / (double)total)):P2})\n");
+				await c.Response.WriteAsync($"キャッシュミス数: {missTotal:#,0} ({(total == 0 ? 0 : (missTotal / (double)total)):P2})\n");
+				await c.Response.WriteAsync($"メモリ使用量: {GC.GetTotalMemory(true):#,0}bytes\n");
+
 				await c.Response.WriteAsync("\nソースコード: https://github.com/ingen084/KyoshinMonitorProxy\n更新情報: https://github.com/ingen084/KyoshinMonitorProxy/releases");
 				return;
 			}
-			if (c.Request.Host.HasValue && c.Request.Host.Value.EndsWith("bosai.go.jp"))
+			else if (c.Request.Host.HasValue && c.Request.Host.Value.EndsWith("bosai.go.jp"))
 			{
 				await controller.FetchAndWriteAsync(c);
 				return;
@@ -139,7 +142,7 @@ public sealed class WindowsBackgroundService : BackgroundService
 			await BadRequest("cannot proxied host name");
 		});
 
-		var timer = new Timer(_ =>
+		Timer = new Timer(_ =>
 		{
 			controller.CacheStats.RemoveAll(s => (DateTime.Now - s.reqTime) >= TimeSpan.FromMinutes(1));
 			GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
@@ -150,10 +153,12 @@ public sealed class WindowsBackgroundService : BackgroundService
 #if DEBUG
 			Logger.LogWarning("LOH GC After: {memory}", GC.GetTotalMemory(true));
 #endif
+			GC.KeepAlive(Timer);
 		}, null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
 
 		await HostsController.AddAsync(HOSTS_LINE);
 		await app.RunAsync(stoppingToken);
+		GC.KeepAlive(Timer);
 	}
 }
 
