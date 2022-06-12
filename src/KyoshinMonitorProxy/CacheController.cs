@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace KyoshinMonitorProxy
@@ -12,13 +13,14 @@ namespace KyoshinMonitorProxy
 
 		public CacheController(IMemoryCache cache)
 		{
-			var httpClientHandler = new HttpClientHandler
+			var httpClientHandler = new SocketsHttpHandler
 			{
-				ServerCertificateCustomValidationCallback = (message, cert, chain, errors) =>
+				SslOptions = new System.Net.Security.SslClientAuthenticationOptions
 				{
-					return true;
+					RemoteCertificateValidationCallback = delegate { return true; },
 				},
-				AutomaticDecompression = DecompressionMethods.All
+				AutomaticDecompression = DecompressionMethods.All,
+				RequestHeaderEncodingSelector = delegate { return Encoding.UTF8; }
 			};
 			Client = new HttpClient(httpClientHandler);
 			Dns = new DnsRequester();
@@ -97,7 +99,7 @@ namespace KyoshinMonitorProxy
 					Cache.Set(url, cacheObject, new MemoryCacheEntryOptions() 
 					{
 						// latest.json (時刻API) は1秒しかキャッシュしないようにする
-						AbsoluteExpirationRelativeToNow = context.Request.Path.Value.Contains("latest.json") ? TimeSpan.FromSeconds(1) : TimeSpan.FromMinutes(1),
+						AbsoluteExpirationRelativeToNow = context.Request.Path.Value?.Contains("latest.json") ?? false ? TimeSpan.FromSeconds(.9) : TimeSpan.FromMinutes(1),
 						Size = 1,
 					});
 
