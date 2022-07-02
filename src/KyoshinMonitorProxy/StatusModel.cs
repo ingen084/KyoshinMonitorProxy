@@ -13,10 +13,13 @@ namespace KyoshinMonitorProxy
         [JsonPropertyName("missCacheCount")]
         public int? MissCacheCount { get; set; }
         [JsonPropertyName("usedMemoryBytes")]
-        public long? UsedMemoryBytes { get; set; }
+        public ulong? UsedMemoryBytes { get; set; }
+        [JsonPropertyName("savedBytes")]
+        public ulong? SavedBytes { get; set; }
     }
 
     [JsonSerializable(typeof(StatusModel))]
+    [JsonSerializable(typeof(GitHubRelease[]))]
     public partial class StatusModelContext : JsonSerializerContext
     {
     }

@@ -1,73 +1,43 @@
 using KyoshinMonitorProxy;
+using Sentry;
 using Sharprompt;
-using System.Diagnostics;
 using System.Net;
 using System.Runtime;
 using System.Text.Json;
 using Timer = System.Threading.Timer;
 
-var config = await Settings.LoadAsync();
-
-if (args.Length > 0 && args.Contains("--service"))
+using (SentrySdk.Init(o =>
 {
-}
-else
+    o.Dsn = "https://e1d8569e89f34778a6fee01d3e37e7cc@sentry.ingen084.net/5";
+    o.TracesSampleRate = 0.02;
+}))
 {
-    ApplicationConfiguration.Initialize();
-    Application.Run(new MainForm());
-
-    //Console.Title = "KyoshinMonitorProxy 直接起動メニュー";
-    //var sel = Prompt.Select("なにをしますか？", new[] {
-    //    "1. サービスのインストール",
-    //    "2. サービスのアンインストール",
-    //    "3. 証明書の削除",
-    //});
-
-    //if (sel.StartsWith("1."))
-    //{
-    //    var p1 = Process.Start(new ProcessStartInfo("sc.exe", $"create \"KyoshinMonitorProxy\" start=auto binpath=\"{Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "KyoshinMonitorProxy.exe")} --service\" displayname=\"強震モニタ プロキシサービス\""));
-    //    if (p1 != null)
-    //        await p1.WaitForExitAsync();
-    //    var p2 = Process.Start(new ProcessStartInfo("sc.exe", $"start \"KyoshinMonitorProxy\""));
-    //    if (p2 != null)
-    //        await p2.WaitForExitAsync();
-    //    return;
-    //}
-    //else if (sel.StartsWith("2."))
-    //{
-    //    var p2 = Process.Start(new ProcessStartInfo("sc.exe", $"stop \"KyoshinMonitorProxy\""));
-    //    if (p2 != null)
-    //        await p2.WaitForExitAsync();
-    //    var p1 = Process.Start(new ProcessStartInfo("sc.exe", $"delete \"KyoshinMonitorProxy\""));
-    //    if (p1 != null)
-    //        await p1.WaitForExitAsync();
-    //    return;
-    //}
-    //else if (sel.StartsWith("3."))
-    //{
-    //    CertManager.RemoveCert(config);
-    //    return;
-    //}
-    //else
-        return;
-}
-
-const string HOSTS_LINE = "127.0.0.100 smi.lmoniexp.bosai.go.jp www.lmoni.bosai.go.jp www.kmoni.bosai.go.jp";
-
-AppDomain.CurrentDomain.UnhandledException += (s, e) =>
-{
-    HostsController.RemoveAsync(HOSTS_LINE).Wait();
-};
-
-Host.CreateDefaultBuilder(args)
-    .UseWindowsService().ConfigureServices(services =>
+    if (args.Length > 0 && args.Contains("--service"))
     {
-        services.AddHostedService<WindowsBackgroundService>();
-    }).Build().Run();
+    }
+    else
+    {
+        ApplicationConfiguration.Initialize();
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+        Application.Run(new MainForm());
+        return;
+    }
+
+    AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+    {
+        HostsController.RemoveAsync(WindowsBackgroundService.HOSTS_LINE).Wait();
+    };
+
+    Host.CreateDefaultBuilder(args)
+        .UseWindowsService().ConfigureServices(services =>
+        {
+            services.AddHostedService<WindowsBackgroundService>();
+        }).Build().Run();
+}
 
 public sealed class WindowsBackgroundService : BackgroundService
 {
-    const string HOSTS_LINE = "127.0.0.100 smi.lmoniexp.bosai.go.jp www.lmoni.bosai.go.jp www.kmoni.bosai.go.jp";
+    public const string HOSTS_LINE = "127.0.0.100 smi.lmoniexp.bosai.go.jp www.lmoni.bosai.go.jp www.kmoni.bosai.go.jp";
     private Timer? Timer { get; set; }
 
     private ILogger<WindowsBackgroundService> Logger { get; }
@@ -98,15 +68,6 @@ public sealed class WindowsBackgroundService : BackgroundService
             {
                 configure.UseHttps(cert);
             });
-        });
-        builder.UseSentry(o =>
-        {
-            o.Dsn = "https://e1d8569e89f34778a6fee01d3e37e7cc@sentry.ingen084.net/5";
-            // When configuring for the first time, to see what the SDK is doing:
-            o.Debug = true;
-            // Set TracesSampleRate to 1.0 to capture 100% of transactions for performance monitoring.
-            // We recommend adjusting this value in production.
-            o.TracesSampleRate = 1.0;
         });
         await using var app = builder.Build();
 
@@ -152,11 +113,12 @@ public sealed class WindowsBackgroundService : BackgroundService
                 c.Response.StatusCode = 200;
                 await JsonSerializer.SerializeAsync(c.Response.Body, new StatusModel
                 {
-                    Version = "0.0.2",
+                    Version = "0.0.3",
                     RequestCount = controller.CacheStats.Count,
                     HitCacheCount = controller.CacheStats.Count(s => s.isHit),
                     MissCacheCount = controller.CacheStats.Count(s => !s.isHit),
-                    UsedMemoryBytes = GC.GetTotalMemory(true),
+                    UsedMemoryBytes = (ulong)GC.GetTotalMemory(true),
+                    SavedBytes = controller.CachedBytes,
                 }, StatusModelContext.Default.StatusModel);
                 return;
             }

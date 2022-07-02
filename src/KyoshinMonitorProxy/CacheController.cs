@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -39,6 +40,7 @@ namespace KyoshinMonitorProxy
 			byte[] Body);
 
 		private IMemoryCache Cache { get; }
+		public ulong CachedBytes { get; private set; }
 		public List<(DateTime reqTime, bool isHit)> CacheStats { get; } = new();
 
 		public async Task FetchAndWriteAsync(HttpContext context)
@@ -51,8 +53,8 @@ namespace KyoshinMonitorProxy
 			// キャッシュされていればキャッシュを返す
 			if (Cache.TryGetValue(url, out cache) && cache != null)
 			{
-				Console.WriteLine("キャッシュ利用: " + url);
-				await Write(context, cache);
+				Debug.WriteLine("キャッシュ利用: " + url);
+				await Write(context, cache, true);
 				CacheStats.Add((DateTime.Now, true));
 				return;
 			}
@@ -60,8 +62,9 @@ namespace KyoshinMonitorProxy
 			// 現在取得中のスレッドが存在する場合待機して再帰呼び出し
 			if (LockCache.TryGetValue(url, out var mre))
 			{
-				Console.WriteLine("キャッシュ待機中: " + url);
-				await Task.Run(() => mre.Wait(10000), context.RequestAborted);
+				Debug.WriteLine("キャッシュ待機中: " + url);
+				if (!await Task.Run(() => mre.Wait(10000, context.RequestAborted)))
+					throw new Exception("timeout");
 				await FetchAndWriteAsync(context);
 				return;
 			}
@@ -71,12 +74,12 @@ namespace KyoshinMonitorProxy
 			// ロックキャッシュに挿入、できなければすでに他のスレッドが取得を開始しているので再帰呼び出し
 			if (!LockCache.TryAdd(url, mre))
 			{
-				Console.WriteLine("ロックキャッシュ再起: " + url);
+				Debug.WriteLine("ロックキャッシュ再起: " + url);
 				await FetchAndWriteAsync(context);
 				return;
 			}
 
-			Console.WriteLine("フェッチ開始: " + url);
+			Debug.WriteLine("フェッチ開始: " + url);
 			CacheStats.Add((DateTime.Now, false));
 			//await Semaphore.WaitAsync(10000, context.RequestAborted);
 			try
@@ -103,18 +106,18 @@ namespace KyoshinMonitorProxy
 						Size = 1,
 					});
 
-				await Write(context, cacheObject);
+				await Write(context, cacheObject, false);
 			}
 			finally
 			{
 				// ロック開放
 				mre.Set();
-				//Console.WriteLine("Semaphore: " + Semaphore.Release());
+				//Debug.WriteLine("Semaphore: " + Semaphore.Release());
 				LockCache.Remove(url, out _);
 			}
 		}
 
-		private static async Task Write(HttpContext context, CacheEntry entry)
+		private async Task Write(HttpContext context, CacheEntry entry, bool isCached)
 		{
 			var response = context.Response;
 
@@ -129,6 +132,8 @@ namespace KyoshinMonitorProxy
 			response.Headers.Remove("connection");
 
 			await response.Body.WriteAsync(entry.Body.AsMemory(0, entry.Body.Length), context.RequestAborted);
+			if (isCached)
+				CachedBytes += (uint)entry.Body.Length;
 		}
 	}
 }
