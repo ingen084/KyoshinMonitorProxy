@@ -86,13 +86,13 @@ namespace KyoshinMonitorProxy
             {
                 var currentVersion = Assembly.GetExecutingAssembly()?.GetName().Version;
                 var releases = (await Client.GetFromJsonAsync("https://api.github.com/repos/ingen084/KyoshinMonitorProxy/releases", StatusModelContext.Default.GitHubReleaseArray))
-                    ?.Where(r => !r.Draft && Version.TryParse(r.TagName, out var v) && v > currentVersion)
-                        .OrderByDescending(r => Version.TryParse(r.TagName, out var v) ? v : new Version());
+                    ?.Where(r => !r.Draft && Version.TryParse(r.TagName.Replace("v", ""), out var v) && v > currentVersion)
+                        .OrderByDescending(r => Version.TryParse(r.TagName.Replace("v", ""), out var v) ? v : new Version());
                 Invoke(() =>
                 {
-                    if (!linkLabel1.Visible && (releases?.Any() ?? false))
+                    if (releases?.Any() ?? false)
                     {
-                        notifyIcon1.BalloonTipText = "更新があります。";
+                        notifyIcon1.BalloonTipText = "KyoshinMonitorPrioxy の更新があります。";
                         notifyIcon1.ShowBalloonTip(3000);
                     }
 
